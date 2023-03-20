@@ -1,0 +1,45 @@
+FROM quay.io/buildah/stable:v1.23.1
+
+ENV CGO_ENABLED=0 \
+    GOOS=linux \
+    GOARCH=amd64 \
+    ENVTEST_K8S_VERSION="1.24.1" \
+
+RUN update-ca-trust extract && \
+
+    # Buildah tutorial Dockerfile part https://github.com/containers/buildah/blob/ccc99160bb0612b60e58ab0de070690b35cf53f1/contrib/buildahimage/Containerfile#L77
+    # /!\ The commented part is not needed since subgid/subuid are already set in the quay.io/buildah/stable:v1.23.1 baseimage -> https://github.com/containers/buildah/blob/ccc99160bb0612b60e58ab0de070690b35cf53f1/contrib/buildahimage/Containerfile#L77
+
+    #RUN touch /etc/subgid /etc/subuid \
+    # && chmod g=u /etc/subgid /etc/subuid /etc/passwd \
+    # && echo build:10000:65536 > /etc/subuid \
+    # && echo build:10000:65536 > /etc/subgid
+
+    # Use chroot since the default runc does not work when running rootless
+    echo "export BUILDAH_ISOLATION=chroot" >> /home/build/.bashrc && \
+
+    # Use VFS since fuse does not work
+    mkdir -p /home/build/.config/containers && \
+    (echo '[storage]';echo 'driver = "vfs"') > /home/build/.config/containers/storage.conf && \
+
+    yum -y install make && \
+    yum -y install skopeo && \
+    yum install -y jq && \
+    
+    # Git Don't need since we are using a different image for each git step.
+   # yum install -y git && \
+   # yum install -y rsync && \
+
+    # Go
+    curl -kLO https://dl.google.com/go/go1.19.1.linux-amd64.tar.gz && \
+    tar -xvf ./go1.19.1.linux-amd64.tar.gz && \
+    cp ./go/bin/go /usr/local/bin && \
+    mv -f go /usr/local && \
+
+    ## Install setup-envtest and it dependencies
+    GOBIN=/home/build/bin go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest && \
+    /home/build/bin/setup-envtest use -p path "${ENVTEST_K8S_VERSION}!" && \
+    cp -r /root/.local/share/kubebuilder-envtest/k8s /home/build/bin
+
+USER build
+WORKDIR /home/build
