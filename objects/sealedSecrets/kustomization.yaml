@@ -1,0 +1,4 @@
+resources:
+- curl_credentials_secret_sealed.yaml
+- image_repo_credentials_secret_sealed.yaml
+- ssh_credentials_secret_sealed.yaml
