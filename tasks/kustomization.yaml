@@ -1,0 +1,7 @@
+resources:
+- bitbucket-pull-request.yaml
+- buildah-build-push.yaml
+- check-image-in-nexus.yaml
+- git-cli.yaml
+- git-clone.yaml
+- test.yaml

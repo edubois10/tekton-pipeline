@@ -1,0 +1,113 @@
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: bitbucket-pull-request
+spec:
+  description: >-
+    This creates a pull-request to merge overlay changes from the pipeline to master
+  params:
+  - name: image-version
+    description: Ros Naas image version being build/pushed
+  - name: git-repository
+    description: The BitBucket repository from where to create the pull request
+  - name: git-base-branch
+    description: Main branch of the pull request (Master).
+  - name: upstream-repository
+    description: Where the changes are coming from
+  - name: new-branch
+    description: Branch were we pushed changed to bitbucket
+  - name: new-commit
+    description: The commit of the source repository currently being applied
+  - name: old-commit
+    description: The commit of the source repository in the master branch
+  steps:
+  - name: create-pull-request
+    onError: stopAndFail
+    image: quay.io/edubois10/tekton/git:latest
+    env:
+      - name: REPOSITORY
+        value: $(params.git-repository)
+      - name: MERGE_TO
+        value: $(params.git-base-branch)
+      - name: UPSTREAM_REPOSITORY
+        value: $(params.upstream-repository)
+      - name: VERSION
+        value: $(params.image-version)
+      - name: NEW_BRANCH
+        value: $(params.new-branch)
+      - name: NEW_COMMIT
+        value: $(params.new-commit)
+      - name: OLD_COMMIT
+        value: $(params.old-commit)
+      - name: PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: curl-authentication
+            key: password
+      - name: USERNAME
+        valueFrom:
+          secretKeyRef:
+            name: curl-authentication
+            key: username
+    script: | 
+      #!/usr/bin/env sh
+
+      # Do not set -x, because of passwords
+      set -eu
+
+      # Fix later
+      USERNAME=$(echo $USERNAME | tr -d '\n')
+      PASSWORD=$(echo $PASSWORD | tr -d '\n')
+      curl -u $USERNAME:$PASSWORD --fail-with-body \
+      -H "Content-Type: application/json" \
+      "https://api.github.com/repos/edubois10/${REPOSITORY}/pulls" \
+      -d '{
+          "title": "'${NEW_BRANCH}'",
+          "description": "The tekton pipeline was triggered and a new image was built and pushed in quay.io. Click [here](https://github.com/edubois10/tekton-pipeline/compare/main...'${NEW_BRANCH}'?expand=1  for a diff of all changes.",
+          "state": "OPEN",
+          "open": true,
+          "closed": false,
+          "fromRef": {
+              "id": "refs/heads/'${NEW_BRANCH}'",
+              "repository": {
+                  "slug": "'${REPOSITORY}'",
+                  "name": null,
+                  "project": {
+                      "key": "BOSC"
+                  }
+              }
+          },
+          "toRef": {
+              "id": "refs/heads/'${MERGE_TO}'",
+              "repository": {
+                  "slug": "'${REPOSITORY}'",
+                  "name": null,
+                  "project": {
+                      "key": "BOSC"
+                  }
+              }
+          },
+          "locked": false,
+          "reviewers": [
+              {
+                  "user": {
+                      "name": ""    
+                  }
+              },
+              {
+                  "user": {
+                      "name": ""    
+                  }
+              },
+              {
+                  "user": {
+                      "name": ""    
+                  }
+              },
+              {
+                  "user": {
+                      "name": ""    
+                  }
+              }
+          ]
+      }'
