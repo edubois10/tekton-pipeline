@@ -1,0 +1,45 @@
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: make
+spec:
+  description: >-
+    Test the project being built
+  workspaces:
+  - name: output
+  params:
+    - name: target
+      description: The Makefile target to execute
+      type: string
+  steps:
+  - name: read
+    onError: stopAndFail
+    image: quay.io/edubois10/tekton/pipeline-tools:latest
+    resources:
+      limits:
+          cpu: "2"
+          memory: 2000Mi
+      requests:
+        cpu: "1"
+        memory: 1000Mi
+    script: | 
+      #!/usr/bin/env sh
+      set -eux
+      
+      # Needed to run make generate without issues. The repo is owned by the container that git-cloned the repository, therefore we need to specify it's a safe repository.
+      git config --global --add safe.directory /workspace/output/source
+
+      export GOCACHE=/workspace/output/go-cache
+      cd /workspace/output/source
+      
+      cp -r /home/build/bin .
+
+      ENVTEST_K8S_VERSION=$(make envtestVersion)
+
+      if [[ ! -f ./bin/k8s/$ENVTEST_K8S_VERSION-linux-amd64/etcd &&  ./bin/k8s/$ENVTEST_K8S_VERSION-linux-amd64/kube-apiserver &&  ./bin/k8s/$ENVTEST_K8S_VERSION-linux-amd64/kubectl ]]
+      then
+        echo '[ERROR]: The ENVTEST_K8S_VERSION from your source repository, doesn t match the one installed in the container.'
+        exit 1
+      fi
+
+      make $(params.target)

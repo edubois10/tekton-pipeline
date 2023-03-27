@@ -1,0 +1,46 @@
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: buildah-build-push
+spec:
+  workspaces:
+  - name: output
+  - name: nexus-credentials
+  params:
+  - name: image
+    description: The image name
+  - name: repository
+    description: The image repository
+  - name: tag
+    description: The image tag
+  steps:
+  - name: read
+    image: quay.io/edubois10/tekton/pipeline-tools:latest
+    resources:
+      limits:
+        cpu: "2"
+        memory: 2000Mi
+    script: | 
+      #!/usr/bin/env sh
+      set -eux
+
+      export GOCACHE=/workspace/output/go-cache
+      cd /workspace/output/source
+
+      img=$(params.repository):$(params.tag)
+      img_latest=$(params.repository):latest
+
+      buildah build --volume=/workspace/output/go-cache:/root/.cache/go-build -t $img -t $img_latest .
+      buildah push --digestfile=digest $img
+      buildah push $img_latest
+
+      cat << EOF > config/overlays/latest/kustomization.yaml
+      resources:
+        - ../../default
+
+      images:
+      - name: $(params.image)
+        newName: $(params.repository)
+        newTag: $(params.tag)
+        digest: $(cat digest)
+      EOF
